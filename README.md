@@ -1,14 +1,7 @@
 
 # Sistema de incendio con Arduino
 
-
-
-
-
-
-## Demo
-
-![](https://drive.google.com/file/d/1UtpIbJVPqqhiy1V4pZDgzANOKaG6MJUu/view?usp=drive_link)
+![screenshot](2023-06-21.png)
 
 
 ## Integrante
