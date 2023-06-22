@@ -1,0 +1,195 @@
+// importacion de librerias
+#include <LiquidCrystal.h>
+
+#include <IRremote.h>
+
+#include <Servo.h>
+
+#define LED_ROJO 13
+#define LED_AZUL 12
+#define RECEPTOR 11
+#define SENSOR_TEMP 0
+
+// inicializando los botones del control 
+#define codigo_on 0xFF00BF00
+#define func_stop 0xFD02BF00
+
+// LCD
+LiquidCrystal LCD(2,3,4,5,6,7);
+
+//SERVOMotor
+Servo servoMotor;
+
+//sistema de alarma
+float temperatura = 0;
+int umbral_temperatura = 60;
+bool alarma_activada = false;
+int estacionActual= 0;
+int estacionAnterior = 0;
+
+void setup()
+{
+  Serial.begin(9600);
+  
+  // inicialización del control remoto IR
+  IrReceiver.begin(RECEPTOR, DISABLE_LED_FEEDBACK);
+  
+  // inicialización del display LCD
+  LCD.begin(16,2);
+  LCD.clear();
+  LCD.setCursor(0,0);
+
+  // inicialización del servo motor
+  servoMotor.attach(9);
+  
+  // inicialización de los pines de los leds
+  pinMode(LED_ROJO, OUTPUT);
+  pinMode(LED_AZUL, OUTPUT);
+}
+
+void loop()
+{
+ 
+ servoMotor.write(0);
+ temperatura = leer_temperatura(); 
+ Serial.println(temperatura);
+  
+ // control remoto IR                
+ if (IrReceiver.decode())
+ {
+    Serial.println(""); 
+   	Serial.println("CODIGO -->"); 
+    // muestra el valor hexadecimal de la señal recibida
+    Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX); 
+   // espera la próxima señal
+    IrReceiver.resume(); 
+ }
+  // si recibe una señal igual a la del boton on/of inicia el sistema de lectura de temperatura y estacion del año
+  if (IrReceiver.decodedIRData.decodedRawData == codigo_on)
+  {
+    estacionAnterior = estacionActual; 
+    leer_estacion(temperatura);
+  }
+  //si recibe señal del boton stop y la temperatura supera los 60 desactiva la alarma de incendios, termina el programa.
+    else if ((IrReceiver.decodedIRData.decodedRawData == func_stop) and (alarma_activada))
+    {
+      estacionAnterior = estacionActual; 
+     desactivar_alarma();
+    }
+}
+  
+//lectura de valor del sensor de temperatura y convierte en voltaje a emperatura en grados
+float leer_temperatura()
+{
+  int lectura = analogRead(SENSOR_TEMP);
+  float temperatura = map(lectura, 0, 1023, -50, 450);
+  
+  return temperatura;
+}
+
+// Muestra la temperatura actual en el display LCD
+void imprimir_mensaje(int actual, int anterior, float temp, const char*mensaje)
+{
+  if (actual != anterior)
+  { 
+  LCD.clear();
+  LCD.setCursor(0, 0);
+  LCD.print(temp);
+  LCD.setCursor(0, 1);
+  LCD.print(mensaje);
+  }
+
+}
+void mensaje_alarma(int actual, int anterior, const char*mensaje,const char*mensaje2)
+{
+  if (actual != anterior)
+  { 
+  LCD.clear();
+  LCD.setCursor(0, 0);
+  LCD.print(mensaje);
+  LCD.setCursor(0, 1);
+  LCD.print(mensaje2);
+  }
+
+}
+
+// dependiendo de la lectura de temperatura determina la estacion del año o un incendio y la muestra en el display LCD
+void leer_estacion(float tempe)
+{
+  if (tempe >= -50 && tempe < 10)
+  {
+   estacionActual = 1;
+   imprimir_mensaje(estacionActual, estacionAnterior,tempe, "INVIERNO");
+  }
+  else if (tempe >= 10 && tempe < 20)
+  {
+   estacionActual = 2;
+   imprimir_mensaje(estacionActual, estacionAnterior,tempe, "OTOÑO");
+  }
+  else if (tempe >= 20 && tempe < 25)
+  { 
+   estacionActual = 3;
+   imprimir_mensaje(estacionActual, estacionAnterior,tempe, "PRIMAVERA");
+  }
+  else if (tempe >= 25 && tempe < 35)
+  {
+   estacionActual = 4;
+   imprimir_mensaje(estacionActual, estacionAnterior,tempe, "VERANO");
+  }
+  else if (tempe > umbral_temperatura)
+  {
+    activar_alarma();
+  }
+}
+
+//sistema de alerta al detectar un incendio, mensaje por LCD, encendido de servomotor y parpadeo de luces leds
+void activar_alarma()
+{ 
+  estacionActual = 5;
+  alarma_activada = true;
+  mensaje_alarma(estacionActual, estacionAnterior, "ALARMA","FUEGO!!");
+  
+  servo_giro();
+  
+   // Encender los leds
+  alarma_leds();
+
+}
+
+//sistema de desactivacion de alarma, mensaje por LCD, apagado de servomotor y luces.
+void desactivar_alarma()
+{
+  estacionActual = 6;
+  mensaje_alarma(estacionActual, estacionAnterior, "Alarma","Desactivada");
+    
+  alarma_activada = false; 
+  //Setear servo en 0
+   servoMotor.write(0);
+  
+  // Apagar los leds
+   digitalWrite(LED_ROJO, LOW);
+   digitalWrite(LED_AZUL, LOW); 
+   
+}  
+
+//titileo de luces leds
+void alarma_leds()
+{
+  digitalWrite(LED_ROJO, HIGH);
+  digitalWrite(LED_AZUL, HIGH);
+  delay(500);
+  digitalWrite(LED_ROJO, LOW);
+  digitalWrite(LED_AZUL, LOW);
+  
+}
+
+void servo_giro()
+{
+  
+  servoMotor.write(0);
+  delay(1000);
+  servoMotor.write(90);
+  delay(1000);
+  servoMotor.write(180);
+  delay(1000);
+}
